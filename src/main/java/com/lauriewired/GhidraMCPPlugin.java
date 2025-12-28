@@ -341,6 +341,13 @@ public class GhidraMCPPlugin extends Plugin {
             sendResponse(exchange, listDefinedStrings(offset, limit, filter));
         });
 
+        server.createContext("/read_data", exchange -> {
+            Map<String, String> qparams = parseQueryParams(exchange);
+            String address = qparams.get("address");
+            int size = parseIntOrDefault(qparams.get("size"), 0);
+            sendResponse(exchange, readData(address, size));
+        });
+
         server.setExecutor(null);
         new Thread(() -> {
             try {
@@ -1411,6 +1418,53 @@ public class GhidraMCPPlugin extends Plugin {
             }
         }
         return sb.toString();
+    }
+
+	/**
+     * Read raw data from an address and format as hex dump
+     */
+    private String readData(String addressStr, int size) {
+        Program program = getCurrentProgram();
+        if (program == null) return "No program loaded";
+        if (addressStr == null || addressStr.isEmpty()) return "Address is required";
+        if (size <= 0) return "Size must be greater than 0";
+
+        try {
+            Address addr = program.getAddressFactory().getAddress(addressStr);
+            ghidra.program.model.mem.Memory memory = program.getMemory();
+
+            StringBuilder result = new StringBuilder();
+            int bytesPerLine = 16;
+
+            for (int rowOffset = 0; rowOffset < size; rowOffset += bytesPerLine) {
+                Address rowAddr = addr.add(rowOffset);
+                StringBuilder hexParts = new StringBuilder();
+                StringBuilder asciiParts = new StringBuilder();
+
+                for (int i = 0; i < bytesPerLine; i++) {
+                    if (rowOffset + i >= size) {
+                        hexParts.append("   ");
+                        asciiParts.append(" ");
+                    } else {
+                        Address currentAddr = addr.add(rowOffset + i);
+                        int byteVal = memory.getByte(currentAddr) & 0xFF;
+                        hexParts.append(String.format("%02x ", byteVal));
+                        // Printable ASCII or dot
+                        if (byteVal >= 0x20 && byteVal <= 0x7e) {
+                            asciiParts.append((char) byteVal);
+                        } else {
+                            asciiParts.append(".");
+                        }
+                    }
+                }
+
+                result.append(String.format("%s: %s |%s|\n", rowAddr, hexParts.toString().trim(), asciiParts));
+            }
+
+            return result.toString().trim();
+        } catch (Exception e) {
+            return "Error reading data: " + e.getMessage();
+        }
     }
 
     /**
