@@ -71,6 +71,13 @@ def list_classes(offset: int = 0, limit: int = 100) -> list:
     """
     return safe_get("classes", {"offset": offset, "limit": limit})
 
+@mcp.tool() # added by ewilded
+def read_data(address: str, size: int = 0) -> list:
+    """
+    Read memory at the given address. Returns formatted hex dump (address, hex bytes, ASCII).
+    """
+    return safe_get("read_data", {"address": address, "size": size})
+
 @mcp.tool()
 def decompile_function(name: str) -> str:
     """
